@@ -1,120 +1,118 @@
 import pandas as pd
 
-def backtest_dataframe(df):
-    position = 0  # Current position in lots (positive for long, negative for short)
-    net_profit = 0
-    df['buy_date'] = ''
-    df['sell_date'] = ''
-    df['short_open_date'] = ''
-    df['short_close_date'] = ''
-    
-    buy_prices = []
-    buy_positions = []
-    short_prices = []
-    short_positions = []
-    total_gains = 0
-    total_losses = 0
-    logs = []  # List to store log entries
+def backtest_with_drawdown_and_equity_curve(df):
+    initial_balance = 0  # Starting balance
+    balance = initial_balance  # Balance starts with initial balance
+    net_profit = 0  # Initialize net profit to zero
+    overall_profit = 0
+    position = 0  # Position (positive for long, negative for short)
+    total_positions = 0;
+    long_entry_price = []
+    short_entry_price = []
 
+    
+    logs = []  # Store logs for debugging
+    
+    last_signal_index = -5  # Initialize to a value that allows the first signal to be processed
+    
     for i in reversed(df.index):
         close = df["close"][i]
         date = df['date'][i]
-        log_entry = f"Index: {i} | Date: {date}"  # Reset log_entry for each iteration
+        log_entry = ""
+        # Reset net profit for this iteration
+        net_profit = 0
 
-        # Buy action
+        # Buy signal
         if df["signal"][i] == 1:
-            if position < 0:  # Close all short positions if any
-                for j in range(len(short_prices)):
-                    short_profit = short_prices[j] - close
-                    profit_or_loss = short_profit * abs(short_positions[j])
-                    if profit_or_loss > 0:
-                        total_gains += profit_or_loss
-                        log_entry += f", Profit for short trade {j+1}: ${profit_or_loss:.2f}"
-                    else:
-                        total_losses += abs(profit_or_loss)
-                        log_entry += f", Loss for short trade {j+1}: ${abs(profit_or_loss):.2f}"
-                    net_profit += profit_or_loss
+            if len(short_entry_price) > 0:  # Close all short positions
+                for x in range(len(short_entry_price)):
+                    profit =  short_entry_price[x] - close
+                    log_entry = f"Closing short position, Profit: ${profit:.2f} position: {position}"
+                    net_profit += profit
+                    position -= 1
+                    logs.append(log_entry)
+                log_entry = f"Net Profit: {net_profit}"
+                overall_profit+=net_profit
+                logs.append(log_entry)
+                short_entry_price = []
 
-                df.at[i, 'short_close_date'] = date
-                log_entry += f", Closing Short Position at {close}, Net Profit: ${net_profit:.2f}"
-                logs.append(log_entry)  # Add log entry
-                short_prices = []
-                short_positions = []
-                position = 0
-
-            if position > 0:  # Add to existing long position
-                buy_prices.append(close)
-                buy_positions.append(1)
-                df.at[i, 'buy_date'] = date
-                log_entry += f", Adding to Long Position at {close}, Buy Open Price: {buy_prices[0]}"
-                logs.append(log_entry)  # Add log entry
+            # Open long position
+            if position == 0:
+                long_entry_price.append(close)  # Set entry price for long
                 position += 1
-                
-            elif position == 0:  # Start a new long position
-                buy_prices.append(close)
-                buy_positions.append(1)
-                df.at[i, 'buy_date'] = date
-                log_entry += f", Opening Long Position at {close}, Buy Open Price: {close}"
-                logs.append(log_entry)  # Add log entry
+                log_entry = f"Index: {i} | Date: {date} | Close: {close}, Opening long position at ${close:.2f} position: {position}"
+                logs.append(log_entry)
+                total_positions+=1
+            elif position > 0:
+                # Adjust position size if needed
+                long_entry_price.append(close) 
                 position += 1
-
-        # Sell action
+                log_entry = f"Index: {i} | Date: {date} | Close: {close}, Adding to long position at ${close:.2f} position: {position}"
+                logs.append(log_entry)
+                total_positions+=1
+        
+        # Sell signal
         elif df["signal"][i] == -1:
-            if position > 0:  # Close all long positions
-                for j in range(len(buy_prices)):
-                    buy_profit = close - buy_prices[j]
-                    profit_or_loss = buy_profit * buy_positions[j]
-                    if profit_or_loss > 0:
-                        total_gains += profit_or_loss
-                        log_entry += f", Profit for long trade {j+1}: ${profit_or_loss:.2f}"
-                    else:
-                        total_losses += abs(profit_or_loss)
-                        log_entry += f", Loss for long trade {j+1}: ${abs(profit_or_loss):.2f}"
-                    net_profit += profit_or_loss
-
-                df.at[i, 'sell_date'] = date
-                log_entry += f", Closing Long Position at {close}, Net Profit: ${net_profit:.2f}"
-                logs.append(log_entry)  # Add log entry
-                buy_prices = []
-                buy_positions = []
-                position = 0
-
-            if position == 0:  # Open a new short position
-                short_prices.append(close)
-                short_positions.append(-1)
-                df.at[i, 'short_open_date'] = date
-                log_entry += f", Opening Short Position at {close}, Short Open Price: {close}"
-                logs.append(log_entry)  # Add log entry
+            if len(long_entry_price) > 0:  # Close all long positions
+                for x in range(len(long_entry_price)):
+                    profit = close - long_entry_price[x]
+                    log_entry = f"Closing long position, Profit: ${profit:.2f} position: {position}"
+                    net_profit += profit
+                    position -= 1
+                    logs.append(log_entry)
+                log_entry = f"Net Profit<><><><><><><><: {net_profit}"
+                overall_profit+=net_profit
+                logs.append(log_entry)
+                long_entry_price = []
+            # Open short position
+            if position == 0:
+                short_entry_price.append(close)
                 position -= 1
-
-            elif position < 0:  # Increase short position size
-                short_prices.append(close)
-                short_positions.append(-1)
-                df.at[i, 'short_open_date'] = date
-                log_entry += f", Adding to Short Position at {close}, Short Open Price: {short_prices[0]}"
-                logs.append(log_entry)  # Add log entry
+                log_entry = f"Index: {i} | Date: {date} | Close: {close}, Opening short position at ${close:.2f} position: {position}"
+                logs.append(log_entry)
+                total_positions+=1
+            elif position < 0:
+                # Adjust position size if needed
+                short_entry_price.append(close)
                 position -= 1
-
-    # Save all logs to a CSV file
+                log_entry = f"Index: {i} | Date: {date} | Close: {close}, Adding to short position at ${close:.2f} position: {position}"
+                logs.append(log_entry)
+                total_positions+=1
+        
+    
+    if len(short_entry_price) > 0:  # Close all short positions
+        for x in range(len(short_entry_price)):
+            profit =  short_entry_price[x] - close
+            log_entry = f"Closing short position, Profit: ${profit:.2f} position: {position}"
+            net_profit += profit
+            position -= 1
+            logs.append(log_entry)
+            overall_profit+=net_profit
+        short_entry_price = []
+    if len(long_entry_price) > 0:  # Close all long positions
+        for x in range(len(long_entry_price)):
+            profit = close - long_entry_price[x]
+            log_entry = f"Closing long position, Profit: ${profit:.2f} position: {position}"
+            net_profit += profit
+            position -= 1
+            logs.append(log_entry)
+            overall_profit+=net_profit    
+        long_entry_price = []
+    
+    
+    # Save logs for debugging
     logs_df = pd.DataFrame(logs, columns=['Log'])
     logs_df.to_csv('trading_logs.csv', index=False)
     
-    # Save results to a CSV file
-    results = {
-        'Total Net Profit': [net_profit],
-        'Total Gains': [total_gains],
-        'Total Losses': [total_losses]
-    }
-    
-    results_df = pd.DataFrame(results)
-    results_df.to_csv('trading_results.csv', index=False)
     
     # Print total net profit and loss
-    print()
     print('Evaluation Metrics:')
     print('-----------------------------------')
-    print(f"Total Net Profit: ${net_profit:.2f}")
-    print(f"Total Gains: ${total_gains:.2f}")
-    print(f"Total Losses: ${total_losses:.2f}")
+    total_net_profit = balance - initial_balance
+    print(f"Start balance: ${balance:.2f}")
+    print(f"OverAll Profit: ${overall_profit:.2f}")
+    print(f"Closing Balance: ${(balance+overall_profit):.2f}")
+    print(f"Total Positions: ${total_positions:.2f}")
+
     print()
 
