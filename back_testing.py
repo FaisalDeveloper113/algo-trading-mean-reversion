@@ -8,12 +8,14 @@ def backtest_with_drawdown_and_equity_curve(df):
     overall_profit = 0
     position = 0  # Position (positive for long, negative for short)
     total_positions = 0
-    overall_drawdown = 0
+    max_drawdown = 0
+    max_profit = 0
     long_entry_price = []
     short_entry_price = []
     equity = initial_balance
-
+    maxTrades = 5
     logs = []  # Store logs for debugging
+    CycleProfit = []
     
     last_signal_index = -5  # Initialize to a value that allows the first signal to be processed
     
@@ -34,21 +36,18 @@ def backtest_with_drawdown_and_equity_curve(df):
         # Calculate drawdown
         if len(short_entry_price) > 0:
             for x in range(len(short_entry_price)):  
-                if(high - short_entry_price[x] > 0):
-                    dd += high - short_entry_price[x]
-                if(high - short_entry_price[x] < 0):
-                    dd -= high - short_entry_price[x]
+                dd += short_entry_price[x] - high
+                    
         
         if len(long_entry_price) > 0: 
             for x in range(len(long_entry_price)):     
-                if(long_entry_price[x] - low > 0):
-                    dd += long_entry_price[x] - low
-                if(long_entry_price[x] - low < 0):
-                    dd -= long_entry_price[x] - low
+                dd += low - long_entry_price[x] 
         
-        equity = balance - dd
-        if dd > overall_drawdown:
-            overall_drawdown = dd
+        equity = balance + dd
+        if dd < max_drawdown:
+            max_drawdown = dd
+        if dd > max_profit:
+            max_profit = dd
                 
         # Save balance, equity, and dates for plotting
         balance_over_time.append(balance)
@@ -65,25 +64,26 @@ def backtest_with_drawdown_and_equity_curve(df):
                     position += 1
                     logs.append(log_entry)
                 log_entry = f"Net Profit: {net_profit}"
-                overall_profit += net_profit
                 balance += net_profit
                 logs.append(log_entry)
                 short_entry_price = []
+                CycleProfit.append(net_profit)
 
             # Open long position
-            if position == 0:
-                long_entry_price.append(close)  # Set entry price for long
-                position += 1
-                log_entry = f"Index: {i} | Date: {date} | Close: {close}, Opening long position at ${close:.2f} position: {position}"
-                logs.append(log_entry)
-                total_positions += 1
-            elif position > 0:
+            if(len(long_entry_price) < maxTrades):
+                if position == 0:
+                    long_entry_price.append(close)  # Set entry price for long
+                    position += 1
+                    log_entry = f"Index: {i} | Date: {date} | Close: {close}, Opening long position at ${close:.2f} position: {position}"
+                    logs.append(log_entry)
+                    total_positions += 1
+                elif position > 0:
                 # Adjust position size if needed
-                long_entry_price.append(close) 
-                position += 1
-                log_entry = f"Index: {i} | Date: {date} | Close: {close}, Adding to long position at ${close:.2f} position: {position}"
-                logs.append(log_entry)
-                total_positions += 1
+                    long_entry_price.append(close) 
+                    position += 1
+                    log_entry = f"Index: {i} | Date: {date} | Close: {close}, Adding to long position at ${close:.2f} position: {position}"
+                    logs.append(log_entry)
+                    total_positions += 1
         
         # Sell signal
         elif df["signal"][i] == -1:
@@ -95,25 +95,26 @@ def backtest_with_drawdown_and_equity_curve(df):
                     position -= 1
                     logs.append(log_entry)
                 log_entry = f"Net Profit<><><><><><><><: {net_profit}"
-                overall_profit += net_profit
                 balance += net_profit
                 logs.append(log_entry)
                 long_entry_price = []
+                CycleProfit.append(net_profit)
             
             # Open short position
-            if position == 0:
-                short_entry_price.append(close)
-                position -= 1
-                log_entry = f"Index: {i} | Date: {date} | Close: {close}, Opening short position at ${close:.2f} position: {position}"
-                logs.append(log_entry)
-                total_positions += 1
-            elif position < 0:
+            if(len(short_entry_price) < maxTrades):
+                if position == 0:
+                    short_entry_price.append(close)
+                    position -= 1
+                    log_entry = f"Index: {i} | Date: {date} | Close: {close}, Opening short position at ${close:.2f} position: {position}"
+                    logs.append(log_entry)
+                    total_positions += 1
+                elif position < 0 and len(long_entry_price) < maxTrades:
                 # Adjust position size if needed
-                short_entry_price.append(close)
-                position -= 1
-                log_entry = f"Index: {i} | Date: {date} | Close: {close}, Adding to short position at ${close:.2f} position: {position}"
-                logs.append(log_entry)
-                total_positions += 1
+                    short_entry_price.append(close)
+                    position -= 1
+                    log_entry = f"Index: {i} | Date: {date} | Close: {close}, Adding to short position at ${close:.2f} position: {position}"
+                    logs.append(log_entry)
+                    total_positions += 1
     
     if len(short_entry_price) > 0:  # Close all short positions
         for x in range(len(short_entry_price)):
@@ -122,7 +123,8 @@ def backtest_with_drawdown_and_equity_curve(df):
             net_profit += profit
             position -= 1
             logs.append(log_entry)
-            overall_profit += net_profit
+        balance += net_profit
+        CycleProfit.append(net_profit)
         short_entry_price = []
 
     if len(long_entry_price) > 0:  # Close all long positions
@@ -131,9 +133,10 @@ def backtest_with_drawdown_and_equity_curve(df):
             log_entry = f"Closing long position, Profit: ${profit:.2f} position: {position}"
             net_profit += profit
             position -= 1
-            logs.append(log_entry)
-            overall_profit += net_profit    
+            logs.append(log_entry) 
+        balance += net_profit
         long_entry_price = []
+        CycleProfit.append(net_profit)
     
     # Save logs for debugging
     logs_df = pd.DataFrame(logs, columns=['Log'])
@@ -143,11 +146,14 @@ def backtest_with_drawdown_and_equity_curve(df):
     print('Evaluation Metrics:')
     print('-----------------------------------')
     print(f"Start balance: ${initial_balance:.2f}")
-    print(f"OverAll Profit: ${overall_profit:.2f}")
     print(f"Closing Balance: ${(balance):.2f}")
     print(f"Total Positions: {total_positions:.2f}")
-    print(f"Total overall_drawdown: ${overall_drawdown:.2f}")
-    print()
+    print(f"Max MaxDrawdown: ${max_drawdown:.2f}")
+    print(f"Max Profit Tardes: ${max_profit:.2f}")
+
+    for x in range(len(CycleProfit)):
+        print(f"{x} Profit: ${CycleProfit[x]:.2f}")
+
 
     # Plotting the balance and equity over time
     plt.figure(figsize=(14, 7))
