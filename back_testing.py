@@ -1,14 +1,16 @@
 import pandas as pd
 
 def backtest_with_drawdown_and_equity_curve(df):
-    initial_balance = 0  # Starting balance
+    initial_balance = 100000  # Starting balance
     balance = initial_balance  # Balance starts with initial balance
     net_profit = 0  # Initialize net profit to zero
     overall_profit = 0
     position = 0  # Position (positive for long, negative for short)
-    total_positions = 0;
+    total_positions = 0
+    overall_drawdown = 0
     long_entry_price = []
     short_entry_price = []
+    equity = initial_balance
 
     
     logs = []  # Store logs for debugging
@@ -17,10 +19,38 @@ def backtest_with_drawdown_and_equity_curve(df):
     
     for i in reversed(df.index):
         close = df["close"][i]
+        high = df["high"][i]
+        low = df["low"][i]
         date = df['date'][i]
         log_entry = ""
         # Reset net profit for this iteration
         net_profit = 0
+        dd = 0
+        if len(short_entry_price) > 0:
+            for x in range(len(short_entry_price)):  
+                if(high - short_entry_price[x] > 0):
+                    dd += high - short_entry_price[x]
+                if(high - short_entry_price[x] < 0):
+                    dd -= high - short_entry_price[x]
+            
+        
+        if len(long_entry_price) > 0: 
+            for x in range(len(short_entry_price)):     
+                if(long_entry_price[x] - low > 0):
+                    dd += long_entry_price[x] - low
+                if(long_entry_price[x] - low < 0):
+                    dd -= long_entry_price[x] - low
+        
+        if len(short_entry_price) > 0:
+            if len(long_entry_price) > 0: 
+                equity = balance
+        
+        if (dd > overall_drawdown):
+            overall_drawdown = dd
+                
+                
+                  
+        
 
         # Buy signal
         if df["signal"][i] == 1:
@@ -29,10 +59,11 @@ def backtest_with_drawdown_and_equity_curve(df):
                     profit =  short_entry_price[x] - close
                     log_entry = f"Closing short position, Profit: ${profit:.2f} position: {position}"
                     net_profit += profit
-                    position -= 1
+                    position += 1
                     logs.append(log_entry)
                 log_entry = f"Net Profit: {net_profit}"
                 overall_profit+=net_profit
+                balance += net_profit
                 logs.append(log_entry)
                 short_entry_price = []
 
@@ -62,6 +93,7 @@ def backtest_with_drawdown_and_equity_curve(df):
                     logs.append(log_entry)
                 log_entry = f"Net Profit<><><><><><><><: {net_profit}"
                 overall_profit+=net_profit
+                balance += net_profit
                 logs.append(log_entry)
                 long_entry_price = []
             # Open short position
@@ -108,11 +140,12 @@ def backtest_with_drawdown_and_equity_curve(df):
     # Print total net profit and loss
     print('Evaluation Metrics:')
     print('-----------------------------------')
-    total_net_profit = balance - initial_balance
-    print(f"Start balance: ${balance:.2f}")
+    print(f"Start balance: ${initial_balance:.2f}")
     print(f"OverAll Profit: ${overall_profit:.2f}")
-    print(f"Closing Balance: ${(balance+overall_profit):.2f}")
+    print(f"Closing Balance: ${(balance):.2f}")
     print(f"Total Positions: ${total_positions:.2f}")
+    print(f"Total overall_drawdown: ${overall_drawdown:.2f}")
+    
 
     print()
 
