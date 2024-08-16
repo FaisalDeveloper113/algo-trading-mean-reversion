@@ -1,8 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
-def backtest_with_drawdown_and_equity_curve(df):
-    initial_balance = 100000  # Starting balance
+def backtest_with_drawdown_and_equity_curve(df, maxTrades = 5,initial_balance = 100000 ):
     balance = initial_balance  # Balance starts with initial balance
     net_profit = 0  # Initialize net profit to zero
     overall_profit = 0
@@ -13,7 +12,6 @@ def backtest_with_drawdown_and_equity_curve(df):
     long_entry_price = []
     short_entry_price = []
     equity = initial_balance
-    maxTrades = 5
     logs = []  # Store logs for debugging
     CycleProfit = []
     
@@ -151,8 +149,8 @@ def backtest_with_drawdown_and_equity_curve(df):
     print(f"Max MaxDrawdown: ${max_drawdown:.2f}")
     print(f"Max Profit Tardes: ${max_profit:.2f}")
 
-    for x in range(len(CycleProfit)):
-        print(f"{x} Profit: ${CycleProfit[x]:.2f}")
+    #for x in range(len(CycleProfit)):
+        #print(f"{x} Profit: ${CycleProfit[x]:.2f}")
 
 
     # Plotting the balance and equity over time
